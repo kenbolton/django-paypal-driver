@@ -9,9 +9,15 @@
 # Email: ozgurvt@gmail.com
 
 
-import urllib, md5, datetime
+import urllib2, datetime
 from cgi import parse_qs
 from django.conf import settings
+from django.utils.http import urlencode
+from decimal import Decimal, ROUND_UP
+try:
+    from django.conf import settings
+except:
+    passtings
 
 # Exception messages
 
@@ -59,7 +65,7 @@ class PayPal(object):
             self.PAYPAL_REDIRECT_URL = "https://www.paypal.com/cgi-bin/webscr?cmd=_express-checkout&token="
 
         # initialization
-        self.signature = urllib.urlencode(self.credientials) + '&'
+        self.signature = urlencode(self.credientials) + '&'
         self.setexpresscheckouterror = None
         self.getexpresscheckoutdetailserror = None
         self.doexpresscheckoutpaymenterror = None
@@ -112,6 +118,8 @@ class PayPal(object):
 
         If you want to add extra parameters, you can define them in **kwargs dict. For instance:
          - SetExpressCheckout(10.00, US, http://www.test.com/cancel/, http://www.test.com/return/, **{'SHIPTOSTREET': 'T Street', 'SHIPTOSTATE': 'T State'})
+
+        More information can be found at https://cms.paypal.com/us/cgi-bin/?cmd=_render-content&content_ID=developer/e_howto_api_ECCustomizing
         """
         parameters = {
             'METHOD' : 'SetExpressCheckout',
@@ -124,8 +132,21 @@ class PayPal(object):
         }
         
         parameters.update(kwargs)
-        query_string = self.signature + urllib.urlencode(parameters)
-        response = urllib.urlopen(self.NVP_API_ENDPOINT, query_string).read()
+
+        if cart_items:
+            ci_params = {}
+            for i in range(0, len(cart_items)):
+                item = cart_items[i]
+                ci_params['L_NAME%s' % i] = item['NAME']
+                ci_params['L_NUMBER%s' % i] = item['NUMBER']
+                ci_params['L_DESC%s' % i] = item['DESC']
+                ci_params['L_AMT%s' % i] = item['AMT']
+                ci_params['L_QTY%s' % i] = item['QTY']
+
+            parameters.update(ci_params)
+
+        query_string = self.signature + urlencode(parameters)
+        response = urllib2.urlopen(self.NVP_API_ENDPOINT, query_string).read()
         response_dict = parse_qs(response)
         self.api_response = response_dict
         state = self._get_value_from_qs(response_dict, "ACK")
@@ -169,8 +190,8 @@ class PayPal(object):
             'METHOD' : "GetExpressCheckoutDetails",
             'TOKEN' : token,
         }
-        query_string = self.signature + urllib.urlencode(parameters)
-        response = urllib.urlopen(self.NVP_API_ENDPOINT, query_string).read()
+        query_string = self.signature + urlencode(parameters)
+        response = urllib2.urlopen(self.NVP_API_ENDPOINT, query_string).read()
         response_dict = parse_qs(response)
         self.api_response = response_dict
         state = self._get_value_from_qs(response_dict, "ACK")
@@ -209,17 +230,17 @@ class PayPal(object):
             'CURRENCYCODE' : currency,
             'PAYERID' : payerid,
         }
-        query_string = self.signature + urllib.urlencode(parameters)
-        response = urllib.urlopen(self.NVP_API_ENDPOINT, query_string).read()
+        query_string = self.signature + urlencode(parameters)
+        response = urllib2.urlopen(self.NVP_API_ENDPOINT, query_string).read()
         response_tokens = {}
         for token in response.split('&'):
             response_tokens[token.split("=")[0]] = token.split("=")[1]
         for key in response_tokens.keys():
-            response_tokens[key] = urllib.unquote(response_tokens[key])
-                
+            response_tokens[key] = urllib2.unquote(response_tokens[key])
+
         state = self._get_value_from_qs(response_tokens, "ACK")
         self.response = response_tokens
-        self.api_response = response_tokens
+        self.api_response = response
         if not state in ["Success", "SuccessWithWarning"]:
             self.doexpresscheckoutpaymenterror = GENERIC_PAYMENT_ERROR
             self.apierror = self._get_value_from_qs(response_tokens, "L_LONGMESSAGE0")
@@ -262,27 +283,98 @@ class PayPal(object):
             }
             parameters.update(extra_values)
 
-        query_string = self.signature + urllib.urlencode(parameters)
-        response = urllib.urlopen(self.NVP_API_ENDPOINT, query_string).read()
+        query_string = self.signature + urlencode(parameters)
+        response = urllib2.urlopen(self.NVP_API_ENDPOINT, query_string).read()
         response_tokens = {}
         for token in response.split('&'):
             response_tokens[token.split("=")[0]] = token.split("=")[1]
             
         for key in response_tokens.keys():
-            response_tokens[key] = urllib.unquote(response_tokens[key])
+            response_tokens[key] = urllib2.unquote(response_tokens[key])
 
         state = self._get_value_from_qs(response_tokens, "ACK")
         self.refund_response = response_tokens
-        self.api_response = response_tokens
+        self.api_response = response
         if not state in ["Success", "SuccessWithWarning"]:
             self.refundtransactionerror = GENERIC_REFUND_ERROR
             return False
         return True
 
 
+    def DoDirectPayment(self, acct, expdate, cvv2, cardtype, first_name, last_name, amount, currency = "USD", **kwargs):
+        """
+        Calls the direct payment method of the PayPal API. The detailed explanation for that
+        API call is available on:
+        https://cms.paypal.com/us/cgi-bin/?cmd=_render-content&content_ID=developer/e_howto_api_nvp_r_DoDirectPayment
+
+        @acct: credit card number(string): numeric characters only
+        @expdate: expiry date for the credit card(string): format:MMYYYY
+        @cvv2: card verification value(string): 3 or 4 digit length
+        @cardtype: card type(string): Visa, Mastercard, Discover, Amex, Maestro or Solo.
+        @first_name: First name of the customer
+        @last_name: Surname of the customer
+        @amount: Amount to be charged(decimal) (ex: Decimal('10.00'))
+        @currency: Currency code: Default: USD
+
+        @returns bool
+        
+        Extra parameters (**kwargs) contains several required and optional parameters such as ip_address, shipping
+        address related inputs like street name, country, zipcode.
+        
+        This method sends an HTTP POST request. It contructs the necessary POST request with the given parameters.
+        Then it fetches the result which looks like a raw query string and parses it.
+
+        It returns True if the money can be successfully charged from the credit card by looking at the response code.
+        Otherwise, it returns False and sets the generic error.
+        """
+        # Firstly, validate the known actual parameters with the 'assert' keyword.
+        assert len(expdate) == 6
+        assert cardtype in ["Visa", "MasterCard", "Discover", "Amex", "Maestro", "Solo"]
+        assert type(amount) == Decimal
+
+        # Validate kwargs
+        assert kwargs.get("ipaddress") is not None
+        assert kwargs.get("street") is not None
+        assert kwargs.get("city") is not None
+        assert kwargs.get("state") is not None
+        assert kwargs.get("countrycode") is not None
+        assert kwargs.get("zip") is not None
+
+        # We should format the amount before we put it into the POST data..
+        amount = str(amount.quantize(Decimal(".01"), rounding = ROUND_UP))
+        # Build up the query dictionary..
+        query_dict = {
+            "METHOD": "DoDirectPayment",
+            "PAYMENTACTION": "Sale",
+            "RETURNFMFDETAILS": 0,
+            "CREDITCARDTYPE": cardtype.upper(),
+            "ACCT": acct,
+            "EXPDATE": expdate,
+            "CVV2": cvv2,
+            "FIRSTNAME": first_name,
+            "LASTNAME": last_name,
+            "CURRENCYCODE": currency,
+            "AMT": amount,
+            }
+        # Include the kwargs dictionary into the query dictionary..
+        for key, value in kwargs.items():
+            # All names in the query dict must be uppercase..
+            query_dict[key.upper()] = value
+
+        query_string = self.signature + urlencode(query_dict)
+        response = urllib2.urlopen(self.NVP_API_ENDPOINT, query_string).read()
+        response_dict = parse_qs(response)
+        self.api_response = response
+        self.response = response_dict
+        state = self._get_value_from_qs(response_dict, "ACK")
+        if not state in ["Success", "SuccessWithWarning"]:
+            self.apierror = self._get_value_from_qs(response_dict, "L_LONGMESSAGE0")
+            return False
+        return True
+
+
     def GetPaymentResponse(self):
         return self.response
-
 
 
     def GetRefundResponse(self):

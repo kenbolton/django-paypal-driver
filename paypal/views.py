@@ -40,10 +40,24 @@ def setcheckout(request, return_url, cancel_url, error_url, template = "paypal/s
                 request.user.message_set.create(message = _("No given valid amount. Please check the amount that will be charged."))
             return HttpResponseRedirect(error_url)
 
+        num_cart_items = request.POST.get('num_cart_items', None)
+        cart_items = None
+        if num_cart_items:
+            cart_items = []
+            for i in range(0, int(num_cart_items)):
+                item = {
+                    'NAME':   request.POST.get('cart_items[%s][NAME]' % i),
+                    'NUMBER': request.POST.get('cart_items[%s][NUMBER]' % i),
+                    'DESC':   request.POST.get('cart_items[%s][DESC]' % i),
+                    'AMT':    request.POST.get('cart_items[%s][AMT]' % i),
+                    'QTY':    request.POST.get('cart_items[%s][QTY]' % i)
+                }
+                cart_items.append(item)
+	
         # call the PayPal driver (2)
         driver = PayPal()
         # call the relevant API method (3)
-        result = driver.SetExpressCheckout(amount, currency, return_url, cancel_url)
+        result = driver.SetExpressCheckout(amount, currency, return_url, cancel_url, cart_items)
         # perform the response (4)
         if not result:
             print driver.apierror
