@@ -9,15 +9,19 @@
 # Email: ozgurvt@gmail.com
 
 
-import urllib2, datetime
+import urllib2
+import datetime
 from cgi import parse_qs
-from django.conf import settings
-from django.utils.http import urlencode
 from decimal import Decimal, ROUND_UP
+
+from django.utils.http import urlencode
+
 try:
-    from django.conf import settings
+	from mezzanine.conf import settings
 except:
-    passtings
+    from django.conf import settings
+
+
 
 # Exception messages
 
@@ -28,23 +32,26 @@ GENERIC_PAYMENT_ERROR = "Transaction failed. Check out your order details again.
 GENERIC_REFUND_ERROR = "An error occured, we can not perform your refund request"
 
 class PayPal(object):
-    
     """
     Pluggable Python PayPal Driver that implements NVP (Name Value Pair) API methods.
     There are simply 3 main methods to be executed in order to finish the PayPal payment process.
     You explicitly need to define PayPal username, password and signature in your project's settings file.
-    
+
     Those are:
     1) SetExpressCheckout
     2) GetExpressCheckoutDetails (optional)
     3) DoExpressCheckoutPayment
     """
-    
+
     def __init__(self, debug = False):
         # PayPal Credientials
         # You can use the following api credientials for DEBUGGING. (in shell)
 
         # First step is to get the correct credientials.
+        try:
+            settings.use_editable()
+        except:
+            pass
         self.username  = getattr(settings, "PAYPAL_USER", None)
         self.password  = getattr(settings, "PAYPAL_PASSWORD", None)
         self.sign      = getattr(settings, "PAYPAL_SIGNATURE", None)
@@ -55,7 +62,7 @@ class PayPal(object):
             "SIGNATURE" : self.sign,
             "VERSION" : "53.0",
         }
-        
+
         # Second step is to set the API end point and redirect urls correctly.
         if debug or getattr(settings, "PAYPAL_DEBUG", False):
             self.NVP_API_ENDPOINT    = "https://api-3t.sandbox.paypal.com/nvp"
