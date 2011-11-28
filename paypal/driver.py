@@ -10,17 +10,15 @@
 
 
 import urllib2
-import datetime
 from cgi import parse_qs
 from decimal import Decimal, ROUND_UP
 
 from django.utils.http import urlencode
 
 try:
-	from mezzanine.conf import settings
+    from mezzanine.conf import settings
 except:
     from django.conf import settings
-
 
 
 # Exception messages
@@ -30,6 +28,7 @@ NO_PAYERID_ERROR = "PayPal error occured. There is no PAYERID info to finish per
 GENERIC_PAYPAL_ERROR = "There occured an error while performing PayPal checkout process. We apologize for the inconvenience. We haven't charged your money yet."
 GENERIC_PAYMENT_ERROR = "Transaction failed. Check out your order details again."
 GENERIC_REFUND_ERROR = "An error occured, we can not perform your refund request"
+
 
 class PayPal(object):
     """
@@ -55,14 +54,12 @@ class PayPal(object):
         self.username  = getattr(settings, "PAYPAL_USER", None)
         self.password  = getattr(settings, "PAYPAL_PASSWORD", None)
         self.sign      = getattr(settings, "PAYPAL_SIGNATURE", None)
-
         self.credientials = {
             "USER" : self.username,
             "PWD" : self.password,
             "SIGNATURE" : self.sign,
             "VERSION" : "53.0",
         }
-
         # Second step is to set the API end point and redirect urls correctly.
         if debug or getattr(settings, "PAYPAL_DEBUG", False):
             self.NVP_API_ENDPOINT    = "https://api-3t.sandbox.paypal.com/nvp"
@@ -97,7 +94,6 @@ class PayPal(object):
         else:
             return raw
 
-
     def paypal_url(self, token = None):
         """
         Returns a 'redirect url' for PayPal payments.
@@ -107,8 +103,6 @@ class PayPal(object):
         if not token:
             return None
         return self.PAYPAL_REDIRECT_URL + token
-
-
 
     def SetExpressCheckout(self, amount, currency, return_url, cancel_url, **kwargs):
         """
@@ -126,6 +120,10 @@ class PayPal(object):
         If you want to add extra parameters, you can define them in **kwargs dict. For instance:
          - SetExpressCheckout(10.00, US, http://www.test.com/cancel/, http://www.test.com/return/, **{'SHIPTOSTREET': 'T Street', 'SHIPTOSTATE': 'T State'})
 
+        If SetExpressCheckout is successfull use TOKEN to redirect to the browser to the address BELOW:
+
+        - https://www.sandbox.paypal.com/cgi-bin/webscr?cmd=_express-checkout&token=TOKEN (for development only URL)
+
         More information can be found at https://cms.paypal.com/us/cgi-bin/?cmd=_render-content&content_ID=developer/e_howto_api_ECCustomizing
         """
         parameters = {
@@ -137,9 +135,7 @@ class PayPal(object):
             'AMT' : amount,
             'CURRENCYCODE' : currency,
         }
-        
         parameters.update(kwargs)
-
         if cart_items:
             ci_params = {}
             for i in range(0, len(cart_items)):
@@ -160,25 +156,9 @@ class PayPal(object):
         if state in ["Success", "SuccessWithWarning"]:
             self.token = self._get_value_from_qs(response_dict, "TOKEN")
             return True
-
         self.setexpresscheckouterror = GENERIC_PAYPAL_ERROR
         self.apierror = self._get_value_from_qs(response_dict, "L_LONGMESSAGE0")
         return False
-
-
-
-
-
-    """
-    If SetExpressCheckout is successfull use TOKEN to redirect to the browser to the address BELOW:
-    
-     - https://www.sandbox.paypal.com/cgi-bin/webscr?cmd=_express-checkout&token=TOKEN (for development only URL)
-
-    """
-
-
-
-
 
     def GetExpressCheckoutDetails(self, token):
         """
@@ -192,7 +172,6 @@ class PayPal(object):
         if token is None:
             self.getexpresscheckoutdetails = TOKEN_NOT_FOUND_ERROR
             return False
-
         parameters = {
             'METHOD' : "GetExpressCheckoutDetails",
             'TOKEN' : token,
@@ -206,7 +185,6 @@ class PayPal(object):
             self.getexpresscheckoutdetailserror = self._get_value_from_qs(response_dict, "L_SHORTMESSAGE0")
             self.apierror = self.getexpresscheckoutdetailserror
             return False
-
         return True
 
     def DoExpressCheckoutPayment(self, currency, amount, token = None, payerid = None):
@@ -224,11 +202,9 @@ class PayPal(object):
         if token is None:
             self.doexpresscheckoutpaymenterror = TOKEN_NOT_FOUND_ERROR
             return False
-
         if payerid is None:
             self.doexpresscheckoutpaymenterror = NO_PAYERID_ERROR
             return False
-
         parameters = {
             'METHOD' : "DoExpressCheckoutPayment",
             'PAYMENTACTION' : 'Sale',
@@ -244,7 +220,6 @@ class PayPal(object):
             response_tokens[token.split("=")[0]] = token.split("=")[1]
         for key in response_tokens.keys():
             response_tokens[key] = urllib2.unquote(response_tokens[key])
-
         state = self._get_value_from_qs(response_tokens, "ACK")
         self.response = response_tokens
         self.api_response = response
@@ -257,7 +232,7 @@ class PayPal(object):
     def RefundTransaction(self, transid, refundtype, currency = None, amount = None, note = "Refund"):
         """
         Performs PayPal API method for refund.
-        
+
         @refundtype: 'Full' or 'Partial'
 
         Possible Responses:
@@ -266,7 +241,7 @@ class PayPal(object):
          'BUILD': '1077585', 'L_ERRORCODE0': '10007', 'CORRELATIONID': '3d8fa24c46c65'}
 
          or
-    
+
          {'REFUNDTRANSACTIONID': '9E679139T5135712L', 'FEEREFUNDAMT': '0.70', 'ACK': 'Success', 'TIMESTAMP': '2009-12-13T09:53:06Z',
          'CURRENCYCODE': 'AUD', 'GROSSREFUNDAMT': '13.89', 'VERSION': '53.0', 'BUILD': '1077585', 'NETREFUNDAMT': '13.19',
          'CORRELATIONID': '6c95d7f979fc1'}
@@ -275,13 +250,13 @@ class PayPal(object):
         if not refundtype in ["Full", "Partial"]:
             self.refundtransactionerror = "Wrong parameters given, We can not perform your refund request"
             return False
-        
+
         parameters = {
             'METHOD' : "RefundTransaction",
             'TRANSACTIONID' : transid,
             'REFUNDTYPE' : refundtype,
         }
-        
+
         if refundtype == "Partial":
             extra_values = {
                 'AMT' : amount,
@@ -295,7 +270,7 @@ class PayPal(object):
         response_tokens = {}
         for token in response.split('&'):
             response_tokens[token.split("=")[0]] = token.split("=")[1]
-            
+
         for key in response_tokens.keys():
             response_tokens[key] = urllib2.unquote(response_tokens[key])
 
@@ -306,7 +281,6 @@ class PayPal(object):
             self.refundtransactionerror = GENERIC_REFUND_ERROR
             return False
         return True
-
 
     def DoDirectPayment(self, acct, expdate, cvv2, cardtype, first_name, last_name, amount, currency = "USD", **kwargs):
         """
@@ -324,10 +298,10 @@ class PayPal(object):
         @currency: Currency code: Default: USD
 
         @returns bool
-        
+
         Extra parameters (**kwargs) contains several required and optional parameters such as ip_address, shipping
         address related inputs like street name, country, zipcode.
-        
+
         This method sends an HTTP POST request. It contructs the necessary POST request with the given parameters.
         Then it fetches the result which looks like a raw query string and parses it.
 
@@ -367,7 +341,6 @@ class PayPal(object):
         for key, value in kwargs.items():
             # All names in the query dict must be uppercase..
             query_dict[key.upper()] = value
-
         query_string = self.signature + urlencode(query_dict)
         response = urllib2.urlopen(self.NVP_API_ENDPOINT, query_string).read()
         response_dict = parse_qs(response)
@@ -379,10 +352,8 @@ class PayPal(object):
             return False
         return True
 
-
     def GetPaymentResponse(self):
         return self.response
-
 
     def GetRefundResponse(self):
         return self.refund_response
